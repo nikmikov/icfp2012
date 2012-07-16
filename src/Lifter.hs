@@ -33,7 +33,7 @@ where
   
 import Prelude hiding (Either(..), catch)
 import Data.Array.Unboxed  
-import qualified Data.List as L (find, foldl', maximumBy, isPrefixOf)
+import qualified Data.List as L (find, foldl', maximumBy, isPrefixOf,delete)
 import Data.Function (on)
 import Data.Maybe
 import Data.Time.Clock
@@ -529,7 +529,7 @@ printGameState gs = "lambdas: " ++ (show $ lambdasCollected gs)
 
 
 printResultAndQuit :: GameState -> GameState -> IO()    
-printResultAndQuit _ gs = do putStrLn $ show $ reverse $ turns gs
+printResultAndQuit _ gs = do putStrLn $ L.delete ']' $ L.delete '[' $ show $  reverse $ turns gs
                                --putStrLn  $ printGameState gs
                                --let steps = scanl updateGameState gs0 (reverse $ turns gs)
                                --mapM_ (putStrLn . printGameState) steps
