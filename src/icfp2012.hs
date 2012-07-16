@@ -85,8 +85,9 @@ shortestPathToPoint w calcMaxDepth p1 p2
   
 pathsToLambdas :: GameState -> [Path]
 pathsToLambdas gs = mapMaybe (sp') $ take 6 $ sortBy (compare') targets'
-  where targets' = if isLiftOpen w then [liftPoint gs] else lambdas w
+  where targets' = if isLiftOpen w then [liftPoint gs] else (lambdas w)++addRazors
         w = world gs
+        addRazors = if (razorsAvail gs) < 2 then (razors w) else []
         paths' = mapMaybe (sp') $ take 6 $ sortBy (compare') targets'
         compare' a b = compare (distance' a) (distance' b)
         distance' a = distance (robot w) a
@@ -100,6 +101,7 @@ randomDirection gen  = (directions !! randIdx, snd randResult)
         randResult = randomR (0::Int, 3::Int) gen 
   
           
+{-        
 doTurn :: Int -> GameST Direction
 doTurn numTry  = do gs <- get
                     let w  = world gs
@@ -112,7 +114,8 @@ doTurn numTry  = do gs <- get
                     if (isPassable w p d) || (d == Abort)
                       then return d 
                       else doTurn (numTry - 1)
-                     
+-}                     
+
 doTurn' :: Int -> GameST Direction
 doTurn' numTry = do gs <- get
                     let w  = world gs
@@ -121,17 +124,20 @@ doTurn' numTry = do gs <- get
                         newD = if length mainDirections > 0
                                then head $ path $ head mainDirections
                                else Wait
+                        rzrD = if ((razorsAvail gs) > 0) 
+                                  && (length $ getGrowthAroundPoint w (robot w)) > 0
+                               then ApplyRazor else newD
                         (dR, newGen) = if isBlocked w (robot w) || numTry == 0
                                        then (Abort, rnd gs)   
                                        else randomDirection (rnd gs)
-                        randNum = (fromJust $ elemIndex dR [Up, Down, Left, Right]) `mod` 3
-                        d = if newD /= Wait then [newD, newD, dR]!!randNum else dR
+                        randNum = (fromJust $ elemIndex dR [Up, Down, Left, Right]) `mod` 3 
+                        d = if newD /= Wait && dR /= Abort then [newD, rzrD, dR]!!randNum else dR
                         p = move (robot w) d                        
                         newgs = newGameStateRandom gs newGen    
                     put newgs 
-                    if (isPassable w p d) || (d == Abort)
+                    if (isPassable w p d) || (d == Abort) || (d == ApplyRazor)
                       then return d 
-                      else doTurn (numTry - 1)
+                      else doTurn' (numTry - 1)
                     
 
 
