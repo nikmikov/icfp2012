@@ -178,15 +178,15 @@ parseTocken :: String -> Int -> [String] -> Int
 parseTocken key defVal xs = if isJust maybeTocken then getValFromPair $ fromJust maybeTocken else defVal
     where maybeTocken = L.find (L.isPrefixOf key) xs 
 
-parseWater = parseTocken "Water"0
+parseWater = parseTocken "Water " 0
 
-parseFlooding =  parseTocken "Flooding" 0
+parseFlooding =  parseTocken "Flooding " 0
 
-parseWaterproof =  parseTocken "Waterproof" 5
+parseWaterproof =  parseTocken "Waterproof " 5
 
-parseGrowth = parseTocken "Growth" 25
+parseGrowth = parseTocken "Growth " 25
 
-parseRazors = parseTocken "Razors" 0
+parseRazors = parseTocken "Razors " 0
 
 isRobot :: Tile -> Bool
 isRobot =  (==) Robot
@@ -219,7 +219,7 @@ isRobotAlive gs gsPrev = let w = world gs
                             && not (isRobotDrowned gs)
                     
 isRobotDrowned :: GameState -> Bool                            
-isRobotDrowned gs = ((turnUnderWater gs) > (waterproof gs))
+isRobotDrowned gs = (((turnUnderWater gs)+1) >= (waterproof gs))
                             
 isRobotAtOpenLift :: GameState -> Bool                    
 isRobotAtOpenLift gs = (robot (world gs)) == (liftPoint gs)
@@ -511,6 +511,8 @@ printGameState gs = "lambdas: " ++ (show $ lambdasCollected gs)
                     ++ " score: " ++ (show $ calcScore gs)
                     ++ " turns: " ++ (show $ reverse $ turns gs)
                     ++ " razors: " ++ (show $ razorsAvail gs)                    
+                    ++ " water: " ++ (show $ waterLevel gs)
+                    ++ " underWater: " ++ (show $ turnUnderWater gs)                    
                     ++ "\n" ++ (renderWorld (world gs))
 
 
