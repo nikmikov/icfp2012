@@ -85,9 +85,10 @@ shortestPathToPoint w calcMaxDepth p1 p2
   
 pathsToLambdas :: GameState -> [Path]
 pathsToLambdas gs = mapMaybe (sp') $ take 6 $ sortBy (compare') targets'
-  where targets' = if isLiftOpen w then [liftPoint gs] else (lambdas w)++addRazors
+  where targets' = if isLiftOpen w then [liftPoint gs] else (lambdas w)++addRazors++addHorocks
         w = world gs
         addRazors = if (razorsAvail gs) < 2 then (razors w) else []
+        addHorocks = getPassablePointsunderHorocks w
         paths' = mapMaybe (sp') $ take 6 $ sortBy (compare') targets'
         compare' a b = compare (distance' a) (distance' b)
         distance' a = distance (robot w) a

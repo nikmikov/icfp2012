@@ -19,6 +19,7 @@ module Lifter
          isBlocked,
          isLiftOpen,
          getGrowthAroundPoint,
+         getPassablePointsunderHorocks,
          newGameStateRandom,
          initGameState
        )
@@ -68,6 +69,7 @@ data Tile = Robot
           | Target Char  
           | Growth Int
           | Razor
+          | Horock
           | READ_ERROR  
           deriving (Eq)
 
@@ -95,6 +97,7 @@ instance Show Tile where
   show Earth          = "."
   show (Growth _)     = "W"
   show Razor          = "!"
+  show Horock         = "@"
   show (Trampoline c) = [c]
   show (Target c)     = [c]
   show _              = "ERROR"
@@ -133,6 +136,7 @@ readTile 'L'  = ClosedLift
 readTile 'O'  = OpenLift
 readTile 'W'  = Growth 25
 readTile '!'  = Razor
+readTile '@'  = Horock
 readTile c    = readExtra c
 
 readExtra :: Char -> Tile
@@ -199,6 +203,9 @@ isLambda = (==) Lambda
 isRazor :: Tile -> Bool
 isRazor = (==) Razor
 
+isRock :: Tile -> Bool
+isRock t = elem t [Rock, Horock]
+
 robot :: World -> Point 
 robot = fst . fromJust .  L.find (isRobot . snd) . assocs
 
@@ -208,7 +215,7 @@ isRobotAlive gs gsPrev = let w = world gs
                              pUp = move (robot w) Up
                              tileUp = w ! pUp
                              tileUpPrev = wPrev ! pUp
-                         in not (tileUp == Rock && tileUpPrev /= Rock)
+                         in not (isRock tileUp && not (isRock tileUpPrev) )
                             && not (isRobotDrowned gs)
                     
 isRobotDrowned :: GameState -> Bool                            
@@ -222,6 +229,10 @@ mineLift = fst . fromJust .  L.find (isMineLift . snd) . assocs
 
 lambdas :: World -> [Point]
 lambdas = map fst . filter (isLambda . snd) . assocs
+
+horocks :: World -> [Point]
+horocks = map fst . filter ( (==) Horock . snd) . assocs
+
 
 razors :: World -> [Point]
 razors = map fst . filter (isRazor . snd) . assocs
@@ -249,10 +260,10 @@ isGrowth _ = False
 -- | returns true if robot is able to move to the given point
 isPassable :: World -> Point -> Direction -> Bool
 isPassable w p d
-  | (d == Down) &&  ((w ! p2Up) == Rock) = False 
+  | (d == Down) &&  isRock ((w ! p2Up)) = False 
   | elem (w ! p) [Space, Earth, Lambda, OpenLift, Razor] = True
   | isTrampoline (w ! p)  = True
-  | (w ! p) == Rock 
+  | isRock (w ! p)
     && (d == Right || d == Left) 
     && (w ! (move p d)) == Space = True 
   | otherwise = False
@@ -336,7 +347,7 @@ moveRobot gs d = let w = world gs
                      curPos = robot w
                      newPos = move curPos d
                      canMove = (curPos /= newPos && isPassable w newPos d) || d == ApplyRazor 
-                     rockUpdate = if (w ! newPos) == Rock then [ ((move newPos d) , Rock) ] else []
+                     rockUpdate = if isRock (w ! newPos) then [ ((move newPos d) , (w ! newPos)) ] else []
                      tramplUpd =  if isTrampoline (w ! newPos)  then moveRobotOnTrampoline gs newPos else []
                      growthUpd = if d == ApplyRazor && (razorsAvail gs) > 0
                                  then applyRazorAtPoint w curPos else []
@@ -364,6 +375,9 @@ getGrowthAroundPoint w p = filter ( isGrowth . (!) w ) [ (x1,y1)| x1<- [x-1..x+1
   where x = row p
         y = col p
 
+getPassablePointsunderHorocks :: World -> [Point]
+getPassablePointsunderHorocks w = filter (\x-> elem (w!x) [Space,Earth,Lambda,Razor] ) 
+                                  $  map (flip move Down) $ horocks w
 
 growGrowth :: World -> Point -> Tile -> [ (Point, Tile) ]  
 growGrowth w p grOrig                  
@@ -375,25 +389,25 @@ growGrowth w p grOrig
 updateTile :: GameState -> World -> Point -> Maybe [ (Point, Tile) ]
 updateTile gs w p 
   -- rock is falling if cell under it is an empty space or a robot
-  | (w ! p) == Rock 
-    && (w ! pDown) == Space = Just [(p, Space), (pDown, Rock)]
+  | isRock (w ! p)
+    && (w ! pDown) == Space = Just [(p, Space), (pDown, (cTile pDown) )]
   -- rock (x,y) is falling right down if there is a rock under it and (x+1,y),(x+1,y-1) are empty
-  | (w ! p) == Rock 
-    && (w ! pDown) == Rock
+  | isRock (w ! p)
+    && isRock (w ! pDown)
     && (w ! pRight) == Space
-    && (w ! pRightDown) == Space = Just [(p, Space), (pRightDown, Rock)]
+    && (w ! pRightDown) == Space = Just [(p, Space), (pRightDown, (cTile pRightDown) )]
   -- rock (x,y) is falling left down if there is a rock under it and (x-1,y),(x-1,y-1) are empty 
-  | (w ! p) == Rock 
-    && (w ! pDown) == Rock
+  | isRock (w ! p)
+    && isRock (w ! pDown) 
     && (w ! pLeft) == Space
-    && (w ! pLeftDown) == Space = Just [(p, Space), (pLeftDown, Rock)]
+    && (w ! pLeftDown) == Space = Just [(p, Space), (pLeftDown, (cTile pLeftDown) )]
   -- rocks are sliding right down on the lambdas                                           
-  | (w ! p) == Rock 
+  | isRock (w ! p) 
     && (w ! pDown) == Lambda
     && (w ! pRight) == Space
-    && (w ! pRightDown) == Space = Just [(p, Space), (pRightDown, Rock)] 
+    && (w ! pRightDown) == Space = Just [(p, Space), (pRightDown, (cTile pRightDown) )] 
   -- lift is opened whe no lambda left
-  | (w ! p) == ClosedLift && lambdas w == [] = Just [ (p, OpenLift) ]
+  | (w ! p) == ClosedLift && lambdas w == [] && horocks w == [] = Just [ (p, OpenLift) ]
   -- growth                                               
   | isGrowth (w ! p) = Just (growGrowth w p (growthOrig gs))
   | otherwise = Nothing
@@ -403,7 +417,12 @@ updateTile gs w p
         pUp = move p Up        
         pRightDown = move pDown Right
         pLeftDown = move pDown Left
-        
+        cTile newPoint
+          | (w ! p) == Rock = (w ! p)
+          -- crashing horocks                    
+          | (w ! p) == Horock = let  downTile = w ! (move newPoint Down) 
+                                in if downTile /=Space then Lambda else (w ! p)
+                                                       
   
   
 -- | updating map according rules in 2.3 chapter of the manual
