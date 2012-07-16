@@ -11,13 +11,19 @@ module Lifter
          robot,
          lambdas,
          razors,
+         trampolinesPts,
+         targetsPts,
+         renderWorld,
          playGame,
+         replayGameState,
+         printGameState,
          move,
          distance,
          isPassable,
          isRobotDrowned,
          isBlocked,
          isLiftOpen,
+         isTarget,
          getGrowthAroundPoint,
          getPassablePointsunderHorocks,
          newGameStateRandom,
@@ -178,14 +184,19 @@ parseTocken :: String -> Int -> [String] -> Int
 parseTocken key defVal xs = if isJust maybeTocken then getValFromPair $ fromJust maybeTocken else defVal
     where maybeTocken = L.find (L.isPrefixOf key) xs 
 
+parseWater :: [String] -> Int
 parseWater = parseTocken "Water " 0
 
+parseFlooding :: [String] -> Int
 parseFlooding =  parseTocken "Flooding " 0
 
+parseWaterproof :: [String] -> Int
 parseWaterproof =  parseTocken "Waterproof " 5
 
+parseGrowth :: [String] -> Int
 parseGrowth = parseTocken "Growth " 25
 
+parseRazors :: [String] -> Int
 parseRazors = parseTocken "Razors " 0
 
 isRobot :: Tile -> Bool
@@ -355,6 +366,7 @@ moveRobot gs d = let w = world gs
                     then w // [(curPos, Space), (newPos, Robot)] // rockUpdate // tramplUpd // growthUpd
                     else w
                          
+decGrowth :: Tile -> Tile -> Tile   
 decGrowth (Growth 0) orig = orig
 decGrowth (Growth n) _    = Growth (n -1) 
 decGrowth t _ = t
@@ -414,14 +426,14 @@ updateTile gs w p
   where pDown = move p Down
         pRight = move p Right
         pLeft = move p Left
-        pUp = move p Up        
+--        pUp = move p Up        
         pRightDown = move pDown Right
         pLeftDown = move pDown Left
         cTile newPoint
-          | (w ! p) == Rock = (w ! p)
           -- crashing horocks                    
           | (w ! p) == Horock = let  downTile = w ! (move newPoint Down) 
                                 in if downTile /=Space then Lambda else (w ! p)
+          | otherwise = (w ! p)
                                                        
   
   
@@ -517,11 +529,12 @@ printGameState gs = "lambdas: " ++ (show $ lambdasCollected gs)
 
 
 printResultAndQuit :: GameState -> GameState -> IO()    
-printResultAndQuit gs0 gs = do putStrLn  $ printGameState gs
-                               let steps = scanl updateGameState gs0 (reverse $ turns gs)
-                               mapM_ (putStrLn . printGameState) steps
-                               hFlush stdout
-                               exitSuccess
+printResultAndQuit _ gs = do putStrLn $ show $ reverse $ turns gs
+                               --putStrLn  $ printGameState gs
+                               --let steps = scanl updateGameState gs0 (reverse $ turns gs)
+                               --mapM_ (putStrLn . printGameState) steps
+                             hFlush stdout
+                             exitSuccess
     
 checkEndCondition :: GameState -> GameState -> Bool
 checkEndCondition gs gsPrev
@@ -544,13 +557,13 @@ playGame gs0 gsbest doTurn =  playGame' gs0 gsbest 0 doTurn
 
 playGame' :: GameState -> GameState -> Int -> (Int -> GameST Direction) -> IO()
 playGame' gs0 gsbest it doTurn = do let gs00 = if it > 10000 then gs0  else gs0
-                                        lenGsBest = length $ turns gsbest 
-                                        turnsGsBest = take (quot lenGsBest 2) (turns gsbest)
+                                        --lenGsBest = length $ turns gsbest 
+                                        --turnsGsBest = take (quot lenGsBest 2) (turns gsbest)
                                         endSt = stripToBestTurn $ playOneGame gs00 doTurn
                                         newBest = endSt `deepseq` getBestGameState gsbest endSt
-                                    liftIO $  do if (turns newBest) /= (turns gsbest)
-                                                   then putStrLn $ printGameState endSt 
-                                                   else return()
+                                    liftIO $  do --if (turns newBest) /= (turns gsbest)
+                                                 --  then putStrLn $ printGameState endSt 
+                                                 --  else return()
                                                  s <- getPendingSignals
                                                  if s `seq` inSignalSet sigINT s
                                                    then printResultAndQuit gs0 newBest

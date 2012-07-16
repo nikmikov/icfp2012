@@ -17,4 +17,5 @@ executable lifter
   main-is: icfp2012.hs            
   other-modules: Lifter      
   build-depends:       base ==4.5.*, array, time, random, mtl, unix, deepseq, containers
-  ghc-options: -Wall -fno-warn-orphans -funbox-strict-fields  -prof -auto-all		
+  ghc-options: -Wall -fno-warn-orphans -funbox-strict-fields  
+  -- -prof -auto-all	

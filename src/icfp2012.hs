@@ -2,14 +2,14 @@ module Main(main)
 where
 
 import Prelude hiding (Either(..), catch)  
-import System.Environment
+--import System.Environment
 import System.Random
 import System.Posix.Signals
 import Control.Monad.State.Strict
-import Data.Time.Clock (getCurrentTime, diffUTCTime)
-import Data.List (find, minimumBy,sort, sortBy, nubBy, elemIndex)
+--import Data.Time.Clock (getCurrentTime, diffUTCTime)
+import Data.List (sortBy, elemIndex)
 import qualified Data.Set as Set
-import Data.Maybe (mapMaybe,catMaybes, isJust, fromJust)
+import Data.Maybe (mapMaybe, isJust, fromJust)
 
 
 import Lifter
@@ -89,7 +89,7 @@ pathsToLambdas gs = mapMaybe (sp') $ take 6 $ sortBy (compare') targets'
         w = world gs
         addRazors = if (razorsAvail gs) < 2 then (razors w) else []
         addHorocks = getPassablePointsunderHorocks w
-        paths' = mapMaybe (sp') $ take 6 $ sortBy (compare') targets'
+        --paths' = mapMaybe (sp') $ take 6 $ sortBy (compare') targets'
         compare' a b = compare (distance' a) (distance' b)
         distance' a = distance (robot w) a
         sp' = shortestPathToPoint w calcMaxDepth (robot w)
@@ -100,23 +100,7 @@ randomDirection gen  = (directions !! randIdx, snd randResult)
   where directions = [Up, Down, Left, Right]
         randIdx = fst randResult
         randResult = randomR (0::Int, 3::Int) gen 
-  
-          
-{-        
-doTurn :: Int -> GameST Direction
-doTurn numTry  = do gs <- get
-                    let w  = world gs
-                        (d, newGen) = if isBlocked w (robot w) || numTry == 0
-                                      then (Abort, rnd gs)   
-                                      else randomDirection (rnd gs)
-                        p = move (robot w) d
-                        newgs = newGameStateRandom gs newGen    
-                    put newgs 
-                    if (isPassable w p d) || (d == Abort)
-                      then return d 
-                      else doTurn (numTry - 1)
--}                     
-
+ 
 doTurn' :: Int -> GameST Direction
 doTurn' numTry = do gs <- get
                     let w  = world gs
@@ -144,9 +128,9 @@ doTurn' numTry = do gs <- get
 
 main :: IO ()
 main = do  gs <- initGameState
-           putStrLn $ show $ waterLevel gs
-           putStrLn $ show $ flooding gs
-           putStrLn $ show $ waterproof gs
+           --putStrLn $ show $ waterLevel gs
+           --putStrLn $ show $ flooding gs
+           --putStrLn $ show $ waterproof gs
            --putStrLn $ show $ validDirections (world gs) (5,5)
            --putStrLn $ show $ shortestPathToPoint (world gs) 30 (robot (world gs)) (3,2)
            --putStrLn $ show $ (robot (world gs))
