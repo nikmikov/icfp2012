@@ -14,6 +14,7 @@ module Lifter
          move,
          distance,
          isPassable,
+         isRobotDrowned,
          isBlocked,
          isLiftOpen,
          newGameStateRandom,
@@ -23,7 +24,7 @@ where
   
 import Prelude hiding (Either(..), catch)
 import Data.Array.Unboxed  
-import qualified Data.List as L (find, foldl', maximumBy)
+import qualified Data.List as L (find, foldl', maximumBy, isPrefixOf)
 import Data.Function (on)
 import Data.Maybe
 import Data.Time.Clock
@@ -61,8 +62,10 @@ data Tile = Robot
           | OpenLift             
           | Earth 
           | Space
+          | Trampoline Char  
+          | Target Char  
           | READ_ERROR  
-          deriving (Eq,Enum,Bounded)
+          deriving (Eq)
 
 
 data Direction = Up | Right | Down | Left | Wait | Abort deriving (Bounded, Eq, Enum, Ord)
@@ -77,15 +80,18 @@ instance Show Direction where
 
 
 instance Show Tile where
-  show Robot        = "R"
-  show Lambda       = "\\"
-  show Rock         = "*"
-  show Wall   	    = "#"
-  show ClosedLift   = "L"
-  show OpenLift     = "O"
-  show Space        = " "
-  show Earth        = "."
-  show _            = "ERROR"
+  show Robot          = "R"
+  show Lambda         = "\\"
+  show Rock           = "*"
+  show Wall   	      = "#"
+  show ClosedLift     = "L"
+  show OpenLift       = "O"
+  show Space          = " "
+  show Earth          = "."
+  show (Trampoline c) = [c]
+  show (Target c)     = [c]
+  show _              = "ERROR"
+  
 
 data GameState = GameState
   { world :: !World
@@ -97,8 +103,10 @@ data GameState = GameState
   , turns :: ![Direction]
   , rnd :: !StdGen  
   , liftPoint:: !Point  
+  , turnUnderWater :: !Int  
   , bestScore :: !Int  
   , bestScoreOnTurn :: !Int  
+  , trampolines :: ! [ (Point, Point) ]  --  trampoline -> target
   } 
 
 instance NFData GameState
@@ -114,7 +122,13 @@ readTile '#'  = Wall
 readTile '.'  = Earth
 readTile 'L'  = ClosedLift
 readTile 'O'  = OpenLift
-readTile _    = READ_ERROR
+readTile c    = readExtra c
+
+readExtra :: Char -> Tile
+readExtra c
+  | elem c ['A'..'I'] = Trampoline c
+  | elem c ['1'..'9'] = Target c
+  | otherwise = READ_ERROR
 
 
 distance :: Point -> Point -> Int
@@ -141,15 +155,19 @@ parseMap :: [String] -> [[Tile]]
 parseMap  = reverse . normalize . validLines 
   where validLines = filter (\x-> x /= []) . map parseLine
         
- 
-parseWater :: [String] -> Int
-parseWater _ =  0
+-- | parse String "key val" and return value       
+getValFromPair :: String -> Int
+getValFromPair s = read $ (words s)!!1
 
-parseFlooding :: [String] -> Int
-parseFlooding _ =  0
+parseTocken :: String -> Int -> [String] -> Int
+parseTocken key defVal xs = if isJust maybeTocken then getValFromPair $ fromJust maybeTocken else defVal
+    where maybeTocken = L.find (L.isPrefixOf key) xs 
 
-parseWaterproof :: [String] -> Int
-parseWaterproof _ =  0
+parseWater = parseTocken "Water"0
+
+parseFlooding =  parseTocken "Flooding" 0
+
+parseWaterproof =  parseTocken "Waterproof" 5
 
 isRobot :: Tile -> Bool
 isRobot =  (==) Robot
@@ -166,12 +184,18 @@ isLambda = (==) Lambda
 robot :: World -> Point 
 robot = fst . fromJust .  L.find (isRobot . snd) . assocs
 
-isRobotAlive :: World -> World -> Bool 
-isRobotAlive w wPrev = let pUp = move (robot w) Up
-                           tileUp = w ! pUp
-                           tileUpPrev = wPrev ! pUp
-                       in not (tileUp == Rock && tileUpPrev /= Rock)
+isRobotAlive :: GameState -> GameState -> Bool 
+isRobotAlive gs gsPrev = let w = world gs
+                             wPrev = world gsPrev
+                             pUp = move (robot w) Up
+                             tileUp = w ! pUp
+                             tileUpPrev = wPrev ! pUp
+                         in not (tileUp == Rock && tileUpPrev /= Rock)
+                            && not (isRobotDrowned gs)
                     
+isRobotDrowned :: GameState -> Bool                            
+isRobotDrowned gs = ((turnUnderWater gs) > (waterproof gs))
+                            
 isRobotAtOpenLift :: GameState -> Bool                    
 isRobotAtOpenLift gs = (robot (world gs)) == (liftPoint gs)
 
@@ -181,12 +205,28 @@ mineLift = fst . fromJust .  L.find (isMineLift . snd) . assocs
 lambdas :: World -> [Point]
 lambdas = map fst . filter (isLambda . snd) . assocs
 
+trampolinesPts :: World -> [Point]
+trampolinesPts = map fst . filter (isTrampoline . snd) . assocs
+
+targetsPts :: World -> [Point]
+targetsPts = map fst . filter (isTarget . snd) . assocs
+
+
+isTrampoline :: Tile -> Bool
+isTrampoline  (Trampoline _) = True
+isTrampoline _ = False
+
+isTarget :: Tile -> Bool
+isTarget  (Target _) = True
+isTarget _ = False
+
 
 -- | returns true if robot is able to move to the given point
 isPassable :: World -> Point -> Direction -> Bool
 isPassable w p d
   | (d == Down) &&  ((w ! p2Up) == Rock) = False 
   | elem (w ! p) [Space, Earth, Lambda, OpenLift] = True
+  | isTrampoline (w ! p)  = True
   | (w ! p) == Rock 
     && (d == Right || d == Left) 
     && (w ! (move p d)) == Space = True 
@@ -196,6 +236,23 @@ isPassable w p d
 -- | returns true if robot is blocked at given point and not able to move anymore
 isBlocked :: World -> Point -> Bool
 isBlocked w p = (length $ map (isPassable w p ) [Left,Right,Up,Down]) == 0
+
+-- | parse input lines and returns list of pair ('A','1')
+parseTrampolines :: [String] -> [ (Char, Char) ]
+parseTrampolines  = map (parse' . words) . filter (L.isPrefixOf "Trampoline")
+  where parse' xs = ( head (xs!!1) , head (xs!!3) )  
+
+findTrampl :: Char -> World -> Point
+findTrampl c = fst . fromJust . L.find ( (==) (Trampoline c) . snd ) . assocs
+
+findTarget :: Char -> World -> Point
+findTarget c = fst . fromJust . L.find ( (==) (Target c) . snd ) . assocs
+
+
+-- | return list of trampolines (Trampoline -> Target)
+buildTrampolines :: World -> [String] -> [ (Point, Point) ]
+buildTrampolines w = map trans' . parseTrampolines 
+  where trans' (t1, t2) = (findTrampl t1 w, findTarget t2 w) 
 
 -- | read map from standart input and create initial game state  
 initGameState :: IO GameState
@@ -210,9 +267,10 @@ initGameState  = do
       wtr = parseWater inputLines
       wtrprf = parseWaterproof inputLines      
       fld = parseFlooding inputLines
+      trmpl = buildTrampolines w inputLines
   return GameState {world = w, waterLevel = wtr, flooding = fld, lambdasTotal = length $ lambdas w,
                     waterproof = wtrprf, startTime = time, turns = [], rnd = gen, liftPoint = mineLift w,
-                    bestScore = 0, bestScoreOnTurn = 0}
+                    bestScore = 0, bestScoreOnTurn = 0, turnUnderWater = 0, trampolines = trmpl}
 
 -- | returns string representation of the map
 renderWorld :: World -> String
@@ -230,15 +288,28 @@ move p Left  = (row p, col p - 1)
 move p Right = (row p, col p + 1)
 move p _     = p
 
+findTargetPoint ::  Point -> GameState ->  Point
+findTargetPoint p = snd . fromJust . L.find ( (==) p . fst )  . trampolines 
 
-moveRobot :: World -> Direction -> World                    
-moveRobot w d = let curPos = robot w
-                    newPos = move curPos d
-                    canMove = curPos /= newPos && isPassable w newPos d
-                    rockUpdate = if (w ! newPos) == Rock then [ ((move newPos d) , Rock) ] else []
-                in if canMove 
-                   then w // [(curPos, Space), (newPos, Robot)] // rockUpdate
-                   else w
+findTrampolinesForTarget :: Point -> GameState -> [Point]
+findTrampolinesForTarget p = map fst . filter ( (==) p . snd )  . trampolines
+
+moveRobotOnTrampoline :: GameState -> Point -> [ (Point, Tile) ]
+moveRobotOnTrampoline gs p = (p, Space) : (moveTo', Robot): removedTrampolines'
+  where moveTo' = findTargetPoint p gs
+        removedTrampolines' = map (\x-> (x, Space) ) $ findTrampolinesForTarget moveTo' gs
+
+
+moveRobot :: GameState -> Direction -> World                    
+moveRobot gs d = let w = world gs
+                     curPos = robot w
+                     newPos = move curPos d
+                     canMove = curPos /= newPos && isPassable w newPos d
+                     rockUpdate = if (w ! newPos) == Rock then [ ((move newPos d) , Rock) ] else []
+                     tramplUpd =  if isTrampoline (w ! newPos)  then moveRobotOnTrampoline gs newPos else []
+                 in if canMove 
+                    then w // [(curPos, Space), (newPos, Robot)] // rockUpdate // tramplUpd
+                    else w
                     
 -- | see section 2.3 of the manual                        
 updateTile :: World -> Point -> Maybe [ (Point, Tile) ]
@@ -279,18 +350,24 @@ updateMap w = let updates = concat $ catMaybes $ map (updateTile w) (indices w)
               in w // updates
 
 -- | processes single robot move and returns transformed world according game rules 
-processMove :: World -> Direction -> World
-processMove w d = updateMap $ moveRobot w d
+processMove :: GameState -> Direction -> World
+processMove d = updateMap . moveRobot d
 
 -- | evaluate single Robot move and update game state
 updateGameState :: GameState -> Direction ->  GameState
-updateGameState gs d = let newWorld = processMove (world gs) d
-                           newWaterLevel = waterLevel gs
+updateGameState gs d = let newWorld = processMove gs d
+                           turnsNum = length $ turns gs
+                           floodInc = if (flooding gs) > 0 && (turnsNum `mod` (flooding gs) == 0) then 1 else 0
+                           newWaterLevel = (waterLevel gs) + floodInc
+                           r = robot $ world gs
+                           isUnderWater = (row r) < (waterLevel gs)
+                           newTurnsUnderWater = if isUnderWater then (turnUnderWater gs) + 1 else 0
                        in GameState {world = newWorld, waterLevel = newWaterLevel, 
                                      flooding = flooding gs, waterproof = waterproof gs, 
                                      startTime = startTime gs, turns = d: (turns gs), 
                                      rnd = rnd gs, lambdasTotal = lambdasTotal gs, liftPoint = liftPoint gs,
-                                     bestScore = bestScore gs, bestScoreOnTurn = bestScoreOnTurn gs}    
+                                     bestScore = bestScore gs, bestScoreOnTurn = bestScoreOnTurn gs,
+                                     turnUnderWater = newTurnsUnderWater, trampolines = trampolines gs}    
                           
 updateGameStateBestScore:: GameState -> GameState                          
 updateGameStateBestScore gs = let score = calcScore gs
@@ -301,7 +378,8 @@ updateGameStateBestScore gs = let score = calcScore gs
                                             waterproof = waterproof gs, startTime = startTime gs, 
                                             turns = turns gs, rnd = rnd gs, lambdasTotal = lambdasTotal gs,
                                             liftPoint = liftPoint gs, bestScoreOnTurn = newBestOnTurn,
-                                            bestScore = newBest}
+                                            bestScore = newBest, turnUnderWater = turnUnderWater gs,
+                                            trampolines = trampolines gs}
                           
 stripToBestTurn :: GameState -> GameState                                 
 stripToBestTurn gs = GameState {world = world gs, waterLevel = waterLevel gs, flooding = flooding gs, 
@@ -309,14 +387,16 @@ stripToBestTurn gs = GameState {world = world gs, waterLevel = waterLevel gs, fl
                                             turns = reverse $ take (bestScoreOnTurn gs) $ reverse $ turns gs, 
                                             rnd = rnd gs, lambdasTotal = lambdasTotal gs,
                                             liftPoint = liftPoint gs, bestScoreOnTurn = bestScoreOnTurn gs,
-                                            bestScore = bestScore gs}
+                                            bestScore = bestScore gs, turnUnderWater = turnUnderWater gs,
+                                            trampolines = trampolines gs}
 
 newGameStateRandom :: GameState -> StdGen -> GameState
 newGameStateRandom gs newGen = GameState {world = world gs, waterLevel = waterLevel gs, flooding = flooding gs, 
                                           waterproof = waterproof gs, startTime = startTime gs, 
                                           turns = turns gs, rnd = newGen, lambdasTotal = lambdasTotal gs,
                                           liftPoint = liftPoint gs, bestScoreOnTurn = bestScoreOnTurn gs,
-                                          bestScore = bestScore gs}
+                                          bestScore = bestScore gs, turnUnderWater = turnUnderWater gs,
+                                          trampolines = trampolines gs}
 
 
 
@@ -354,7 +434,7 @@ printResultAndQuit gs0 gs = do putStrLn  $ printGameState gs
     
 checkEndCondition :: GameState -> GameState -> Bool
 checkEndCondition gs gsPrev
-  | (not $ isRobotAlive (world gs) (world gsPrev)) = True
+  | (not $ isRobotAlive gs gsPrev) = True
   | (length $ turns gs) > quot ((colBound w) * (rowBound w) ) 2  = True
   | isRobotAtOpenLift gs = True
   | (head (turns gs)) == Abort = True

@@ -137,9 +137,11 @@ doTurn' numTry = do gs <- get
 
 main :: IO ()
 main = do  gs <- initGameState
-           --putStrLn $ show $ pathsToLambdas gs
-           putStrLn $ show $ validDirections (world gs) (5,5)
-           putStrLn $ show $ shortestPathToPoint (world gs) 30 (robot (world gs)) (3,2)
+           putStrLn $ show $ waterLevel gs
+           putStrLn $ show $ flooding gs
+           putStrLn $ show $ waterproof gs
+           --putStrLn $ show $ validDirections (world gs) (5,5)
+           --putStrLn $ show $ shortestPathToPoint (world gs) 30 (robot (world gs)) (3,2)
            --putStrLn $ show $ (robot (world gs))
            --putStrLn $ show $ isPassable (world gs) (42,5) Left
            blockSignals (addSignal  sigINT emptySignalSet) 
