@@ -28,22 +28,24 @@ evalPath :: Path -> Point
 evalPath  = endPoint
 
 -- | return new Path by adding given direction
-addDirectionToPath :: Path -> Direction -> Path
-addDirectionToPath p d = Path {
+addDirectionToPath :: GameState -> Path -> Direction -> Path
+addDirectionToPath gs p d = Path {
     path = (path p) ++ [d]
   , startPoint = startPoint p
-  , endPoint = move (endPoint p) d
+  , endPoint = moveWithTrampolineCheck gs (endPoint p) d
   }
 
 
 -- | return list of valid directions from the given point
-validDirections :: World -> Point -> [Direction]
-validDirections w p = filter (\d -> isPassable w (move p d) d) [Up,Down,Left,Right] 
+validDirections :: GameState -> Point -> [Direction]
+validDirections gs p = let w = world gs
+                           isPass' d = isPassable w (move p d) d
+                       in filter isPass'  [Up,Down,Left,Right] 
 
         
 -- | similar to above function        
-validPathsFrom :: World -> Path -> Set.Set Point -> [Path]        
-validPathsFrom w p visited = map (addDirectionToPath p) $ filter (filterVisited) $ validDirections w (evalPath p)
+validPathsFrom :: GameState -> Path -> Set.Set Point -> [Path]        
+validPathsFrom w p visited = map (addDirectionToPath w p) $ filter (filterVisited) $ validDirections w (evalPath p)
   where filterVisited d = Set.notMember (move (evalPath p) d) visited
 
 
@@ -56,7 +58,7 @@ findPath pt pths
   
   
 -- | BFS seach implementation 
-shortestPathBFS :: World
+shortestPathBFS :: GameState
                    -> Int
                    -> Point
                    -> Point
@@ -76,7 +78,7 @@ shortestPathBFS w maxTryLength p1 p2 workList pset
           where newPaths' = validPathsFrom w pth (snd acc)
   
 -- | find shortest path to the given point if able to evaluate in less then calcMacDepth turns
-shortestPathToPoint :: World -> Int -> Point -> Point -> Maybe Path
+shortestPathToPoint :: GameState -> Int -> Point -> Point -> Maybe Path
 shortestPathToPoint w calcMaxDepth p1 p2 
   | p1 == p2 = Just (initPath p1)
   | otherwise = shortestPathBFS w calcMaxDepth p1 p2 [initPath p1] (Set.singleton p1)
@@ -91,7 +93,7 @@ pathsToLambdas gs = mapMaybe (sp') $ take 6 $ sortBy (compare') targets'
         --paths' = mapMaybe (sp') $ take 6 $ sortBy (compare') targets'
         compare' a b = compare (distance' a) (distance' b)
         distance' a = distance (robot w) a
-        sp' = shortestPathToPoint w calcMaxDepth (robot w)
+        sp' = shortestPathToPoint gs calcMaxDepth (robot w)
         calcMaxDepth = 20
         
 randomDirection ::StdGen ->  (Direction, StdGen)

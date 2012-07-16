@@ -18,6 +18,7 @@ module Lifter
          replayGameState,
          printGameState,
          move,
+         moveWithTrampolineCheck,
          distance,
          isPassable,
          isRobotDrowned,
@@ -341,6 +342,12 @@ move p Down  = (row p - 1, col p)
 move p Left  = (row p, col p - 1)
 move p Right = (row p, col p + 1)
 move p _     = p
+
+moveWithTrampolineCheck :: GameState -> Point -> Direction -> Point
+moveWithTrampolineCheck gs p d = let newPos = move p d
+                                     w = world gs
+                                 in if isTrampoline (w ! newPos)  then findTargetPoint newPos gs else newPos
+                                 
 
 findTargetPoint ::  Point -> GameState ->  Point
 findTargetPoint p = snd . fromJust . L.find ( (==) p . fst )  . trampolines 
