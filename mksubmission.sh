@@ -4,10 +4,12 @@ SUB_ID="96563296"
 
 FILENAME="icfp-${SUB_ID}.tgz"
 
+COPYFILES="install README PACKAGES-TESTING maps src icfp2012.cabal mksubmission.sh"
+
 echo "creating archive... ${FILENAME}"
 
-cp install PACKAGES-TESTING dist/build/lifter
+cp -a  $COPYFILES  dist/build/lifter
 
-tar  -czf $FILENAME -C dist/build/lifter lifter install PACKAGES-TESTING
+tar  -czf $FILENAME -C  dist/build/lifter $COPYFILES
 
 
