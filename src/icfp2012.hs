@@ -2,11 +2,10 @@ module Main(main)
 where
 
 import Prelude hiding (Either(..), catch)  
---import System.Environment
+
 import System.Random
 import System.Posix.Signals
 import Control.Monad.State.Strict
---import Data.Time.Clock (getCurrentTime, diffUTCTime)
 import Data.List (sortBy, elemIndex)
 import qualified Data.Set as Set
 import Data.Maybe (mapMaybe, isJust, fromJust)

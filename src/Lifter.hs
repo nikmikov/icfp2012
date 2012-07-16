@@ -226,7 +226,8 @@ isRobotAlive gs gsPrev = let w = world gs
                              pUp = move (robot w) Up
                              tileUp = w ! pUp
                              tileUpPrev = wPrev ! pUp
-                         in not (isRock tileUp && not (isRock tileUpPrev) )
+                             isRockOrLambda t = isRock t || isLambda t
+                         in not (isRockOrLambda tileUp && not (isRockOrLambda tileUpPrev) )
                             && not (isRobotDrowned gs)
                     
 isRobotDrowned :: GameState -> Bool                            
@@ -318,7 +319,7 @@ initGameState  = do
       w = listArray ((1,1), (rows, cols)) $ replaceGrowth grwth $ concat listOfListOfTiles
   return GameState {world = w, waterLevel = parseWater inputLines, 
                     flooding = parseFlooding inputLines, 
-                    lambdasTotal = length $ lambdas w,
+                    lambdasTotal = (length $ lambdas w) + (length $ horocks w),
                     waterproof = parseWaterproof inputLines, 
                     startTime = time, turns = [], rnd = gen, liftPoint = mineLift w,
                     bestScore = 0, bestScoreOnTurn = 0, turnUnderWater = 0, 
@@ -505,7 +506,7 @@ replayGameState gs0 = L.foldl' updateGameState gs0
                           
 -- | returns notal number of lambdas collected by robot
 lambdasCollected :: GameState -> Int
-lambdasCollected gs = (lambdasTotal gs) - (length $ lambdas (world gs))
+lambdasCollected gs = (lambdasTotal gs) - (length $ lambdas (world gs)) - (length $ horocks (world gs))
 
 -- | calculate final score for given GS
 calcScore :: GameState -> Int
@@ -529,12 +530,12 @@ printGameState gs = "lambdas: " ++ (show $ lambdasCollected gs)
 
 
 printResultAndQuit :: GameState -> GameState -> IO()    
-printResultAndQuit _ gs = do putStrLn $ L.delete ']' $ L.delete '[' $ show $  reverse $ turns gs
-                               --putStrLn  $ printGameState gs
-                               --let steps = scanl updateGameState gs0 (reverse $ turns gs)
-                               --mapM_ (putStrLn . printGameState) steps
-                             hFlush stdout
-                             exitSuccess
+printResultAndQuit gs0 gs = do putStrLn $ L.delete ']' $ L.delete '[' $ show $  reverse $ turns gs
+                               putStrLn  $ printGameState gs
+                               let steps = scanl updateGameState gs0 (reverse $ turns gs)
+                               mapM_ (putStrLn . printGameState) steps
+                               hFlush stdout
+                               exitSuccess
     
 checkEndCondition :: GameState -> GameState -> Bool
 checkEndCondition gs gsPrev
