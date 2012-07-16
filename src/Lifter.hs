@@ -25,6 +25,7 @@ module Lifter
          isBlocked,
          isLiftOpen,
          isTarget,
+         isGrowth,
          getGrowthAroundPoint,
          getPassablePointsunderHorocks,
          newGameStateRandom,
@@ -487,15 +488,16 @@ updateGameStateBestScore gs = let score = calcScore gs
                                             trampolines = trampolines gs, razorsAvail = razorsAvail gs,
                                             growthOrig = growthOrig gs}
                           
-stripToBestTurn :: GameState -> GameState                                 
-stripToBestTurn gs = GameState {world = world gs, waterLevel = waterLevel gs, flooding = flooding gs, 
-                                            waterproof = waterproof gs, startTime = startTime gs, 
-                                            turns = reverse $ take (bestScoreOnTurn gs) $ reverse $ turns gs, 
-                                            rnd = rnd gs, lambdasTotal = lambdasTotal gs,
-                                            liftPoint = liftPoint gs, bestScoreOnTurn = bestScoreOnTurn gs,
-                                            bestScore = bestScore gs, turnUnderWater = turnUnderWater gs,
-                                            trampolines = trampolines gs,razorsAvail = razorsAvail gs,
-                                            growthOrig = growthOrig gs}
+stripToBestTurn :: GameState -> Bool ->  GameState                                 
+stripToBestTurn gs isAlive = GameState {world = world gs, waterLevel = waterLevel gs, flooding = flooding gs, 
+                                        waterproof = waterproof gs, startTime = startTime gs, 
+                                        turns = reverse $ take ( (bestScoreOnTurn gs) - minusIfDead ) $ reverse $ turns gs, 
+                                        rnd = rnd gs, lambdasTotal = lambdasTotal gs,
+                                        liftPoint = liftPoint gs, bestScoreOnTurn = bestScoreOnTurn gs,
+                                        bestScore = bestScore gs, turnUnderWater = turnUnderWater gs,
+                                        trampolines = trampolines gs,razorsAvail = razorsAvail gs,
+                                        growthOrig = growthOrig gs}
+  where minusIfDead = if isAlive then 0 else 0
 
 newGameStateRandom :: GameState -> StdGen -> GameState
 newGameStateRandom gs newGen = GameState {world = world gs, waterLevel = waterLevel gs, flooding = flooding gs, 
@@ -538,9 +540,9 @@ printGameState gs = "lambdas: " ++ (show $ lambdasCollected gs)
 
 printResultAndQuit :: GameState -> GameState -> IO()    
 printResultAndQuit gs0 gs = do putStrLn $ L.delete ']' $ L.delete '[' $ show $  reverse $ turns gs
-                               putStrLn  $ printGameState gs
-                               let steps = scanl updateGameState gs0 (reverse $ turns gs)
-                               mapM_ (putStrLn . printGameState) steps
+                               --putStrLn  $ printGameState gs
+                               --let steps = scanl updateGameState gs0 (reverse $ turns gs)
+                               --mapM_ (putStrLn . printGameState) steps
                                hFlush stdout
                                exitSuccess
     
@@ -557,7 +559,7 @@ playOneGame :: GameState -> (Int -> GameST Direction) -> GameState
 playOneGame gs doTurn = let (d, newGsSt) = runState (doTurn 5) gs 
                             newGs = updateGameStateBestScore $ updateGameState newGsSt d
                         in if checkEndCondition newGs gs
-                           then newGs
+                           then stripToBestTurn newGs (isRobotAlive newGs gs)
                            else playOneGame newGs doTurn
 
 playGame :: GameState -> GameState -> (Int -> GameST Direction) -> IO()
@@ -567,10 +569,10 @@ playGame' :: GameState -> GameState -> Int -> (Int -> GameST Direction) -> IO()
 playGame' gs0 gsbest it doTurn = do let gs00 = if it > 10000 then gs0  else gs0
                                         --lenGsBest = length $ turns gsbest 
                                         --turnsGsBest = take (quot lenGsBest 2) (turns gsbest)
-                                        endSt = stripToBestTurn $ playOneGame gs00 doTurn
+                                        endSt = playOneGame gs00 doTurn
                                         newBest = endSt `deepseq` getBestGameState gsbest endSt
                                     liftIO $  do --if (turns newBest) /= (turns gsbest)
-                                                 --  then putStrLn $ printGameState endSt 
+                                                 --  then putStrLn $ printGameState newBest 
                                                  --  else return()
                                                  s <- getPendingSignals
                                                  if s `seq` inSignalSet sigINT s

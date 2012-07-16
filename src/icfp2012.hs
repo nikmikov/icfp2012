@@ -9,7 +9,7 @@ import Control.Monad.State.Strict
 import Data.List (sortBy, elemIndex)
 import qualified Data.Set as Set
 import Data.Maybe (mapMaybe, isJust, fromJust)
-
+import Data.Array.Unboxed  ( (!) )
 
 import Lifter
    
@@ -39,7 +39,8 @@ addDirectionToPath gs p d = Path {
 -- | return list of valid directions from the given point
 validDirections :: GameState -> Point -> [Direction]
 validDirections gs p = let w = world gs
-                           isPass' d = isPassable w (move p d) d
+                           isPass' d = (isPassable w (move p d) d )
+                                       || ( (razorsAvail gs) > 0 && isGrowth ( w ! (move p d) ) )
                        in filter isPass'  [Up,Down,Left,Right] 
 
         
@@ -116,8 +117,8 @@ doTurn' numTry = do gs <- get
                         (dR, newGen) = if isBlocked w (robot w) || numTry == 0
                                        then (Abort, rnd gs)   
                                        else randomDirection (rnd gs)
-                        randNum = (fromJust $ elemIndex dR [Up, Down, Left, Right]) `mod` 3 
-                        d = if newD /= Wait && dR /= Abort then [newD, rzrD, dR]!!randNum else dR
+                        randNum = (fromJust $ elemIndex dR [Up, Down, Left, Right])  
+                        d = if newD /= Wait && dR /= Abort then [newD, rzrD, dR, dR]!!randNum else dR
                         p = move (robot w) d                        
                         newgs = newGameStateRandom gs newGen    
                     put newgs 
