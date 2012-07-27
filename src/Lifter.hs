@@ -466,48 +466,23 @@ updateGameState gs d = let newWorld = processMove gs d
                            newTurnsUnderWater = if isUnderWater then (turnUnderWater gs) + 1 else 0
                            razorsInc = if  ((world gs) ! (robot newWorld)) == Razor then 1 else 0 
                            razorsDec = if d == ApplyRazor then 1 else 0
-                       in GameState {world = newWorld, waterLevel = newWaterLevel, 
-                                     flooding = flooding gs, waterproof = waterproof gs, 
-                                     startTime = startTime gs, turns = d: (turns gs), 
-                                     rnd = rnd gs, lambdasTotal = lambdasTotal gs, liftPoint = liftPoint gs,
-                                     bestScore = bestScore gs, bestScoreOnTurn = bestScoreOnTurn gs,
-                                     turnUnderWater = newTurnsUnderWater, trampolines = trampolines gs,
-                                     razorsAvail = (razorsAvail gs) + razorsInc - razorsDec, 
-                                     growthOrig = growthOrig gs}    
+                       in gs {world = newWorld, waterLevel = newWaterLevel, 
+                              turns = d: (turns gs),  turnUnderWater = newTurnsUnderWater,
+                              razorsAvail = (razorsAvail gs) + razorsInc - razorsDec}    
                           
 updateGameStateBestScore:: GameState -> GameState                          
 updateGameStateBestScore gs = let score = calcScore gs
                                   newBest = max score (bestScore gs)
                                   newBestOnTurn = if score > (bestScore gs) 
                                                   then (length $ turns gs) else bestScoreOnTurn gs
-                              in GameState {world = world gs, waterLevel = waterLevel gs, flooding = flooding gs, 
-                                            waterproof = waterproof gs, startTime = startTime gs, 
-                                            turns = turns gs, rnd = rnd gs, lambdasTotal = lambdasTotal gs,
-                                            liftPoint = liftPoint gs, bestScoreOnTurn = newBestOnTurn,
-                                            bestScore = newBest, turnUnderWater = turnUnderWater gs,
-                                            trampolines = trampolines gs, razorsAvail = razorsAvail gs,
-                                            growthOrig = growthOrig gs}
+                              in gs { bestScoreOnTurn = newBestOnTurn, bestScore = newBest}
                           
 stripToBestTurn :: GameState -> Bool ->  GameState                                 
-stripToBestTurn gs isAlive = GameState {world = world gs, waterLevel = waterLevel gs, flooding = flooding gs, 
-                                        waterproof = waterproof gs, startTime = startTime gs, 
-                                        turns = reverse $ take ( (bestScoreOnTurn gs) - minusIfDead ) $ reverse $ turns gs, 
-                                        rnd = rnd gs, lambdasTotal = lambdasTotal gs,
-                                        liftPoint = liftPoint gs, bestScoreOnTurn = bestScoreOnTurn gs,
-                                        bestScore = bestScore gs, turnUnderWater = turnUnderWater gs,
-                                        trampolines = trampolines gs,razorsAvail = razorsAvail gs,
-                                        growthOrig = growthOrig gs}
+stripToBestTurn gs isAlive = gs { turns = reverse $ take ( (bestScoreOnTurn gs) - minusIfDead ) $ reverse $ turns gs}
   where minusIfDead = if isAlive then 0 else 0
 
 newGameStateRandom :: GameState -> StdGen -> GameState
-newGameStateRandom gs newGen = GameState {world = world gs, waterLevel = waterLevel gs, flooding = flooding gs, 
-                                          waterproof = waterproof gs, startTime = startTime gs, 
-                                          turns = turns gs, rnd = newGen, lambdasTotal = lambdasTotal gs,
-                                          liftPoint = liftPoint gs, bestScoreOnTurn = bestScoreOnTurn gs,
-                                          bestScore = bestScore gs, turnUnderWater = turnUnderWater gs,
-                                          trampolines = trampolines gs, razorsAvail = razorsAvail gs,
-                                          growthOrig = growthOrig gs}
-
+newGameStateRandom gs newGen = gs { rnd = newGen }
 
 
 replayGameState :: GameState -> [Direction] ->  GameState
